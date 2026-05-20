@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebBackup — Система бэкапов</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="header">
+    <div>
+      <h1>WebBackup</h1>
+      <p class="subtitle">Система резервного копирования веб-приложений</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Приложений</span>
+        <span class="stat-value">{{ stats.total_applications }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Активных</span>
+        <span class="stat-value">{{ stats.active_applications }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Бэкапов</span>
+        <span class="stat-value">{{ stats.total_backups }}</span>
+      </div>
+      <div class="stat-card success">
+        <span class="stat-label">Успешных</span>
+        <span class="stat-value">{{ stats.successful_backups }}</span>
+      </div>
+      <div class="stat-card danger">
+        <span class="stat-label">Ошибок</span>
+        <span class="stat-value">{{ stats.failed_backups }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Хранилище</span>
+        <span class="stat-value" id="storage-size">{{ stats.total_storage_bytes }}</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Добавить веб-приложение</h2>
+      <form id="add-app-form" class="form-grid">
+        <label>
+          Название
+          <input name="name" required placeholder="Мой сайт">
+        </label>
+        <label>
+          Путь к файлам
+          <input name="source_path" required placeholder="./demo_app">
+        </label>
+        <label>
+          Тип БД
+          <select name="db_type">
+            <option value="none">Без БД</option>
+            <option value="sqlite">SQLite</option>
+            <option value="postgresql">PostgreSQL</option>
+            <option value="mysql">MySQL</option>
+          </select>
+        </label>
+        <label>
+          Подключение к БД
+          <input name="db_connection" placeholder="sqlite:///./demo_app/data/app.db">
+        </label>
+        <label>
+          Расписание (cron)
+          <input name="schedule_cron" placeholder="0 2 * * *">
+        </label>
+        <label>
+          Хранить (дней)
+          <input name="retention_days" type="number" value="30" min="1" max="365">
+        </label>
+        <label class="full-width">
+          Описание
+          <textarea name="description" rows="2" placeholder="Краткое описание"></textarea>
+        </label>
+        <button type="submit" class="btn primary">Добавить</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Зарегистрированные приложения</h2>
+      <div id="apps-list">
+        {% if apps %}
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Название</th>
+              <th>Путь</th>
+              <th>БД</th>
+              <th>Cron</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for app in apps %}
+            <tr data-app-id="{{ app.id }}">
+              <td>{{ app.id }}</td>
+              <td><strong>{{ app.name }}</strong></td>
+              <td><code>{{ app.source_path }}</code></td>
+              <td>{{ app.db_type.value }}</td>
+              <td>{{ app.schedule_cron or '—' }}</td>
+              <td class="actions">
+                <button class="btn small" onclick="runBackup({{ app.id }})">Бэкап</button>
+                <button class="btn small secondary" onclick="showBackups({{ app.id }}, '{{ app.name }}')">История</button>
+                <button class="btn small danger" onclick="deleteApp({{ app.id }})">Удалить</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="empty">Нет приложений. Добавьте первое или зарегистрируйте demo_app.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Последние бэкапы</h2>
+      {% if recent_backups %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Приложение</th>
+            <th>Статус</th>
+            <th>Размер</th>
+            <th>Начало</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in recent_backups %}
+          <tr>
+            <td>{{ b.id }}</td>
+            <td>#{{ b.application_id }}</td>
+            <td><span class="badge {{ b.status.value }}">{{ b.status.value }}</span></td>
+            <td>{{ b.size_bytes or '—' }}</td>
+            <td>{{ b.started_at.strftime('%d.%m.%Y %H:%M') }}</td>
+            <td>
+              {% if b.status.value == 'success' %}
+              <button class="btn small" onclick="restoreBackup({{ b.id }})">Восстановить</button>
+              {% endif %}
+              <button class="btn small danger" onclick="deleteBackup({{ b.id }})">Удалить</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">Бэкапов пока нет.</p>
+      {% endif %}
+    </section>
+  </main>
+
+  <dialog id="backups-modal">
+    <h3 id="modal-title">История бэкапов</h3>
+    <div id="modal-content"></div>
+    <button class="btn secondary" onclick="document.getElementById('backups-modal').close()">Закрыть</button>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
