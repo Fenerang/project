@@ -12,24 +12,65 @@
     <form id="note-form">
       <input name="title" placeholder="Заголовок" required>
       <textarea name="content" placeholder="Текст заметки"></textarea>
-      <button type="submit">Добавить</button>
+      <button type="submit" class="btn-primary">Добавить</button>
     </form>
     <ul id="notes"></ul>
   </div>
   <script>
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
     async function load() {
       const res = await fetch('/api/notes');
       const notes = await res.json();
-      document.getElementById('notes').innerHTML = notes.map(n =>
-        `<li><strong>${n.title}</strong><p>${n.content || ''}</p><small>${n.created_at}</small></li>`
-      ).join('');
+      const list = document.getElementById('notes');
+      if (!notes.length) {
+        list.innerHTML = '<li class="empty">Заметок пока нет</li>';
+        return;
+      }
+      list.innerHTML = notes.map(n => `
+        <li>
+          <div class="note-head">
+            <strong>${escapeHtml(n.title)}</strong>
+            <button type="button" class="btn-delete" onclick="deleteNote(${n.id})">Удалить</button>
+          </div>
+          <p>${escapeHtml(n.content || '')}</p>
+          <small>${escapeHtml(n.created_at)}</small>
+        </li>
+      `).join('');
     }
+
+    async function deleteNote(id) {
+      if (!confirm('Удалить эту заметку?')) return;
+      const res = await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        alert('Не удалось удалить заметку');
+        return;
+      }
+      load();
+    }
+
     document.getElementById('note-form').onsubmit = async (e) => {
       e.preventDefault();
-      await fetch('/api/notes', { method: 'POST', body: new FormData(e.target) });
+      const body = new URLSearchParams(new FormData(e.target));
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      if (!res.ok) {
+        alert('Не удалось добавить заметку');
+        return;
+      }
       e.target.reset();
       load();
     };
+
     load();
   </script>
 </body>

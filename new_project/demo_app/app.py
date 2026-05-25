@@ -46,6 +46,21 @@ class Handler(BaseHTTPRequestHandler):
     else:
       self.send_error(404)
 
+  def do_DELETE(self):
+    parsed = urlparse(self.path)
+    prefix = "/api/notes/"
+    if not parsed.path.startswith(prefix):
+      self.send_error(404)
+      return
+    note_id = parsed.path[len(prefix) :].strip("/")
+    if not note_id.isdigit():
+      self.send_error(400)
+      return
+    if not self._delete_note(int(note_id)):
+      self.send_error(404)
+      return
+    self._json_response({"status": "ok", "deleted_id": int(note_id)})
+
   def do_POST(self):
     if self.path != "/api/notes":
       self.send_error(404)
@@ -72,6 +87,14 @@ class Handler(BaseHTTPRequestHandler):
     rows = conn.execute("SELECT id, title, content, created_at FROM notes ORDER BY id DESC").fetchall()
     conn.close()
     return [{"id": r[0], "title": r[1], "content": r[2], "created_at": r[3]} for r in rows]
+
+  def _delete_note(self, note_id: int) -> bool:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+    conn.commit()
+    deleted = cur.rowcount > 0
+    conn.close()
+    return deleted
 
   def _serve_file(self, path: Path, content_type: str):
     if not path.exists():
